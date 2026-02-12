@@ -1,12 +1,14 @@
+import axios from 'axios';
+import { Send, Sparkles, AlertCircle } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
-import AppLayout from '@/layouts/app-layout';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Send, Bot, User, Sparkles } from 'lucide-react';
-import type { BreadcrumbItem } from '@/types';
+import AppLayout from '@/layouts/app-layout';
 import { chat } from '@/routes';
-import { Card } from '@/components/ui/card';
+import type { BreadcrumbItem } from '@/types';
+import IsTyping from './Components/IsTyping';
+import MessageComponent from './Components/Message';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -15,12 +17,12 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-interface Message {
+export type MessageT = {
     id: string;
     role: 'user' | 'assistant';
     content: string;
     timestamp: Date;
-}
+};
 
 const EmptyState = () => (
     <div className="flex flex-1 animate-in flex-col items-center justify-center p-8 text-center duration-500 fade-in">
@@ -38,7 +40,7 @@ const EmptyState = () => (
 );
 
 const ChatIndex = () => {
-    const [messages, setMessages] = useState<Message[]>([
+    const [messages, setMessages] = useState<MessageT[]>([
         {
             id: '1',
             role: 'assistant',
@@ -48,6 +50,8 @@ const ChatIndex = () => {
     ]);
     const [inputValue, setInputValue] = useState('');
     const [isTyping, setIsTyping] = useState(false);
+    const [conversationId, setConversationId] = useState<string | null>(null);
+    const [error, setError] = useState<string | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     const scrollToBottom = () => {
@@ -58,10 +62,10 @@ const ChatIndex = () => {
         scrollToBottom();
     }, [messages, isTyping]);
 
-    const handleSend = () => {
+    const handleSend = async () => {
         if (!inputValue.trim()) return;
 
-        const userMsg: Message = {
+        const userMsg: MessageT = {
             id: Date.now().toString(),
             role: 'user',
             content: inputValue,
@@ -69,21 +73,72 @@ const ChatIndex = () => {
         };
 
         setMessages((prev) => [...prev, userMsg]);
+        const messageToSend = inputValue;
         setInputValue('');
         setIsTyping(true);
+        setError(null);
 
-        // Simulate AI response
-        setTimeout(() => {
-            const aiMsg: Message = {
-                id: (Date.now() + 1).toString(),
-                role: 'assistant',
-                content:
-                    "I'm a demo AI. In a real implementation, this would connect to your backend logic.",
-                timestamp: new Date(),
-            };
-            setMessages((prev) => [...prev, aiMsg]);
+        try {
+            // Get CSRF token
+            const csrfToken = document
+                .querySelector('meta[name="csrf-token"]')
+                ?.getAttribute('content');
+
+            const response = await axios.post(
+                '/chat',
+                {
+                    message: messageToSend,
+                    conversation_id: conversationId,
+                },
+                {
+                    headers: {
+                        'X-CSRF-TOKEN': csrfToken || '',
+                        'Content-Type': 'application/json',
+                        Accept: 'application/json',
+                    },
+                },
+            );
+
+            if (response.data.success) {
+                const aiMsg: MessageT = {
+                    id: (Date.now() + 1).toString(),
+                    role: 'assistant',
+                    content: response.data.response,
+                    timestamp: new Date(),
+                };
+                setMessages((prev) => [...prev, aiMsg]);
+
+                // Store conversation ID for future messages
+                if (response.data.conversation_id && !conversationId) {
+                    setConversationId(response.data.conversation_id);
+                }
+            } else {
+                const errorMsg =
+                    response.data.error || 'Failed to get response';
+                const details = response.data.details
+                    ? `\n\nDetails: ${response.data.details}`
+                    : '';
+                setError(errorMsg + details);
+            }
+        } catch (err: any) {
+            let errorMessage =
+                err.response?.data?.error ||
+                'Failed to connect to the AI. Please make sure Ollama is running.';
+
+            // Add details if available
+            if (err.response?.data?.details) {
+                errorMessage += `\n\nDetails: ${err.response.data.details}`;
+            }
+            if (err.response?.data?.file && err.response?.data?.line) {
+                errorMessage += `\n\nLocation: ${err.response.data.file}:${err.response.data.line}`;
+            }
+
+            setError(errorMessage);
+            console.error('Chat error:', err);
+            console.error('Full error response:', err.response?.data);
+        } finally {
             setIsTyping(false);
-        }, 1500);
+        }
     };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -103,91 +158,22 @@ const ChatIndex = () => {
                             <EmptyState />
                         ) : (
                             messages.map((msg) => (
-                                <div
-                                    key={msg.id}
-                                    className={`flex w-full ${
-                                        msg.role === 'user'
-                                            ? 'justify-end'
-                                            : 'justify-start'
-                                    } animate-in duration-300 slide-in-from-bottom-2`}
-                                >
-                                    <div
-                                        className={`flex max-w-[85%] gap-3 md:max-w-[70%] ${
-                                            msg.role === 'user'
-                                                ? 'flex-row-reverse'
-                                                : 'flex-row'
-                                        }`}
-                                    >
-                                        <Avatar className="h-8 w-8 shrink-0 md:h-10 md:w-10">
-                                            {msg.role === 'assistant' ? (
-                                                <>
-                                                    <AvatarImage
-                                                        src="/ai-avatar.png"
-                                                        alt="AI"
-                                                    />
-                                                    <AvatarFallback className="bg-primary/10 text-primary">
-                                                        <Bot size={18} />
-                                                    </AvatarFallback>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <AvatarImage
-                                                        src="/user-avatar.png"
-                                                        alt="User"
-                                                    />
-                                                    <AvatarFallback className="bg-muted text-muted-foreground">
-                                                        <User size={18} />
-                                                    </AvatarFallback>
-                                                </>
-                                            )}
-                                        </Avatar>
-
-                                        <div
-                                            className={`group relative flex flex-col ${
-                                                msg.role === 'user'
-                                                    ? 'items-end'
-                                                    : 'items-start'
-                                            }`}
-                                        >
-                                            <div
-                                                className={`rounded-2xl px-4 py-3 text-sm shadow-sm md:text-base ${
-                                                    msg.role === 'user'
-                                                        ? 'rounded-tr-none bg-primary text-primary-foreground'
-                                                        : 'rounded-tl-none border bg-card text-card-foreground'
-                                                }`}
-                                            >
-                                                {msg.content}
-                                            </div>
-                                            <span className="mt-1 px-1 text-[10px] text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
-                                                {msg.timestamp.toLocaleTimeString(
-                                                    [],
-                                                    {
-                                                        hour: '2-digit',
-                                                        minute: '2-digit',
-                                                    },
-                                                )}
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
+                                <MessageComponent key={msg.id} msg={msg} />
                             ))
                         )}
 
-                        {isTyping && (
-                            <div className="flex w-full animate-in justify-start duration-300 fade-in">
-                                <div className="flex max-w-[80%] gap-3">
-                                    <Avatar className="h-8 w-8 shrink-0 md:h-10 md:w-10">
-                                        <AvatarFallback className="bg-primary/10 text-primary">
-                                            <Bot size={18} />
-                                        </AvatarFallback>
-                                    </Avatar>
-                                    <div className="flex items-center space-x-1 rounded-2xl rounded-tl-none border bg-card px-4 py-4 text-card-foreground shadow-sm">
-                                        <div className="h-2 w-2 animate-bounce rounded-full bg-primary/40 [animation-delay:-0.3s]"></div>
-                                        <div className="h-2 w-2 animate-bounce rounded-full bg-primary/40 [animation-delay:-0.15s]"></div>
-                                        <div className="h-2 w-2 animate-bounce rounded-full bg-primary/40"></div>
-                                    </div>
-                                </div>
-                            </div>
+                        {isTyping && <IsTyping />}
+
+                        {error && (
+                            <Alert
+                                variant="destructive"
+                                className="animate-in duration-300 fade-in"
+                            >
+                                <AlertCircle className="h-4 w-4" />
+                                <AlertDescription className="whitespace-pre-wrap">
+                                    {error}
+                                </AlertDescription>
+                            </Alert>
                         )}
                         <div ref={messagesEndRef} />
                     </div>

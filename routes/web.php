@@ -1,9 +1,9 @@
 <?php
 
+use App\Http\Controllers\AiChatController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
-use App\Http\Controllers\AiChatController;
 
 Route::get('/', function () {
     return Inertia::render('welcome', [
@@ -16,5 +16,6 @@ Route::get('dashboard', function () {
 })->middleware(['auth', 'verified'])->name('dashboard');
 
 Route::get('chat', [AiChatController::class, 'index'])->name('chat');
+Route::post('chat', [AiChatController::class, 'chat'])->name('chat.send');
 
 require __DIR__.'/settings.php';
