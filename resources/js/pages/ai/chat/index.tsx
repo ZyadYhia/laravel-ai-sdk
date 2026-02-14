@@ -78,26 +78,38 @@ const ChatIndex = () => {
         setIsTyping(true);
         setError(null);
 
+        console.log('=== Chat Request Started ===');
+        console.log('Message:', messageToSend);
+        console.log('Conversation ID:', conversationId);
+
         try {
             // Get CSRF token
             const csrfToken = document
                 .querySelector('meta[name="csrf-token"]')
                 ?.getAttribute('content');
 
-            const response = await axios.post(
-                '/chat',
-                {
-                    message: messageToSend,
-                    conversation_id: conversationId,
+            console.log('CSRF Token:', csrfToken ? 'Present' : 'Missing');
+
+            const requestData = {
+                message: messageToSend,
+                conversation_id: conversationId,
+            };
+
+            console.log('Request payload:', requestData);
+            console.log('Request URL:', '/chat');
+
+            const response = await axios.post('/chat', requestData, {
+                headers: {
+                    'X-CSRF-TOKEN': csrfToken || '',
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
                 },
-                {
-                    headers: {
-                        'X-CSRF-TOKEN': csrfToken || '',
-                        'Content-Type': 'application/json',
-                        Accept: 'application/json',
-                    },
-                },
-            );
+            });
+
+            console.log('=== Response Received ===');
+            console.log('Status:', response.status);
+            console.log('Success:', response.data.success);
+            console.log('Response data:', response.data);
 
             if (response.data.success) {
                 const aiMsg: MessageT = {
@@ -110,6 +122,10 @@ const ChatIndex = () => {
 
                 // Store conversation ID for future messages
                 if (response.data.conversation_id && !conversationId) {
+                    console.log(
+                        'New conversation ID:',
+                        response.data.conversation_id,
+                    );
                     setConversationId(response.data.conversation_id);
                 }
             } else {
@@ -118,9 +134,16 @@ const ChatIndex = () => {
                 const details = response.data.details
                     ? `\n\nDetails: ${response.data.details}`
                     : '';
+                console.error('Response indicated failure:', errorMsg, details);
                 setError(errorMsg + details);
             }
         } catch (err: any) {
+            console.error('=== Chat Request Failed ===');
+            console.error('Error object:', err);
+            console.error('Error response:', err.response);
+            console.error('Error response data:', err.response?.data);
+            console.error('Error message:', err.message);
+
             let errorMessage =
                 err.response?.data?.error ||
                 'Failed to connect to the AI. Please make sure Ollama is running.';
@@ -128,16 +151,18 @@ const ChatIndex = () => {
             // Add details if available
             if (err.response?.data?.details) {
                 errorMessage += `\n\nDetails: ${err.response.data.details}`;
+                console.error('Error details:', err.response.data.details);
             }
             if (err.response?.data?.file && err.response?.data?.line) {
-                errorMessage += `\n\nLocation: ${err.response.data.file}:${err.response.data.line}`;
+                const location = `${err.response.data.file}:${err.response.data.line}`;
+                errorMessage += `\n\nLocation: ${location}`;
+                console.error('Error location:', location);
             }
 
             setError(errorMessage);
-            console.error('Chat error:', err);
-            console.error('Full error response:', err.response?.data);
         } finally {
             setIsTyping(false);
+            console.log('=== Chat Request Completed ===');
         }
     };
 

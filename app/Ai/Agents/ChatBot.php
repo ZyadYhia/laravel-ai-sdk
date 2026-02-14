@@ -2,7 +2,7 @@
 
 namespace App\Ai\Agents;
 
-use Illuminate\Support\Facades\DB;
+use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasTools;
@@ -12,15 +12,7 @@ use Stringable;
 
 class ChatBot implements Agent, Conversational, HasTools
 {
-    use Promptable;
-
-    /**
-     * Create a new ChatBot instance.
-     */
-    public function __construct(
-        protected ?string $conversationId = null,
-        protected ?int $userId = null,
-    ) {}
+    use Promptable, RemembersConversations;
 
     /**
      * Get the instructions that the agent should follow.
@@ -35,20 +27,7 @@ class ChatBot implements Agent, Conversational, HasTools
      */
     public function messages(): iterable
     {
-        if (! $this->conversationId || ! $this->userId) {
-            return [];
-        }
-
-        return DB::table('agent_conversation_messages')
-            ->where('conversation_id', $this->conversationId)
-            ->where('user_id', $this->userId)
-            ->orderBy('created_at', 'asc')
-            ->get()
-            ->map(fn ($message) => [
-                'role' => $message->role,
-                'content' => $message->content,
-            ])
-            ->toArray();
+        return [];
     }
 
     /**
