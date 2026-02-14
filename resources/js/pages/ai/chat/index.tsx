@@ -4,18 +4,9 @@ import { useState, useRef, useEffect } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import AppLayout from '@/layouts/app-layout';
-import { chat } from '@/routes';
-import type { BreadcrumbItem } from '@/types';
 import IsTyping from './Components/IsTyping';
 import MessageComponent from './Components/Message';
-
-const breadcrumbs: BreadcrumbItem[] = [
-    {
-        title: 'Chat Assistant',
-        href: chat().url,
-    },
-];
+import HomeLayout from '@/layouts/home/layout';
 
 export type MessageT = {
     id: string;
@@ -174,7 +165,7 @@ const ChatIndex = () => {
     };
 
     return (
-        <AppLayout breadcrumbs={breadcrumbs}>
+        <HomeLayout>
             <div className="pt-6">
                 <div className="my-4 flex h-[calc(100vh-4rem)] flex-col overflow-hidden bg-background py-4 md:h-[calc(100vh-4rem)]">
                     {/* Messages Area */}
@@ -230,7 +221,7 @@ const ChatIndex = () => {
                     </div>
                 </div>
             </div>
-        </AppLayout>
+        </HomeLayout>
     );
 };
 
