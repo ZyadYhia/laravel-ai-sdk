@@ -62,9 +62,10 @@ const ChatIndex = () => {
     const { auth } = usePage<{ auth: Auth }>().props;
     const [messages, setMessages] = useState<MessageT[]>([
         {
-            id: '1',
+            id: 'system',
             role: 'assistant',
-            content: 'Hello! I am your AI assistant. How can I help you today?',
+            content:
+                'Hello! I am your AI assistant. How can I help you today?\n\n*Please note: I will format all my responses in Markdown for better readability.*',
             timestamp: new Date(),
         },
     ]);

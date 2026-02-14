@@ -205,7 +205,7 @@ class ProcessChatMessage implements ShouldQueue
             broadcast(new ChatMessageProcessing(
                 $this->userId,
                 $this->tempMessageId,
-                'Using tool: ' . ($event->tool ?? 'unknown')
+                'Using tool: '.($event->tool ?? 'unknown')
             ));
         });
 
@@ -219,7 +219,7 @@ class ProcessChatMessage implements ShouldQueue
             broadcast(new ChatMessageProcessing(
                 $this->userId,
                 $this->tempMessageId,
-                'Tool completed: ' . ($event->tool ?? 'unknown')
+                'Tool completed: '.($event->tool ?? 'unknown')
             ));
         });
     }
