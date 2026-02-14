@@ -1,62 +1,22 @@
-import axios from 'axios';
-import { Send, Sparkles, AlertCircle } from 'lucide-react';
+import { Send, AlertCircle } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import IsTyping from './Components/IsTyping';
 import MessageComponent from './Components/Message';
+import EmptyState from './Components/EmptyState';
 import HomeLayout from '@/layouts/home/layout';
-import { usePage } from '@inertiajs/react';
+import { usePage, router } from '@inertiajs/react';
+import { send } from '@/routes/chat';
 import type { Auth } from '@/types';
-
-export type MessageT = {
-    id: string;
-    role: 'user' | 'assistant';
-    content: string;
-    timestamp: Date;
-};
-
-type MessageProcessedEvent = {
-    conversation_id: string;
-    response: string;
-    temp_message_id: string;
-    timestamp: string;
-};
-
-type MessageFailedEvent = {
-    temp_message_id: string;
-    error: string;
-    timestamp: string;
-};
-
-type MessageProcessingEvent = {
-    temp_message_id: string;
-    status: string;
-    timestamp: string;
-};
-
-type MessageStreamingEvent = {
-    temp_message_id: string;
-    partial_content: string;
-    event_type: string;
-    timestamp: string;
-};
-
-const EmptyState = () => (
-    <div className="flex flex-1 animate-in flex-col items-center justify-center p-8 text-center duration-500 fade-in">
-        <div className="mb-4 rounded-full bg-primary/10 p-4">
-            <Sparkles className="h-8 w-8 text-primary" />
-        </div>
-        <h2 className="text-2xl font-semibold tracking-tight">
-            How can I help you today?
-        </h2>
-        <p className="mt-2 max-w-md text-muted-foreground">
-            I'm your AI assistant. You can ask me anything about your data,
-            generate reports, or get help with your tasks.
-        </p>
-    </div>
-);
+import type {
+    MessageT,
+    MessageFailedEvent,
+    MessageProcessingEvent,
+    MessageProcessedEvent,
+    ChatChannel,
+} from './types.d.ts';
 
 const ChatIndex = () => {
     const { auth } = usePage<{ auth: Auth }>().props;
@@ -82,38 +42,18 @@ const ChatIndex = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     };
 
-    useEffect(() => {
-        scrollToBottom();
-    }, [messages, isTyping]);
-
-    // Setup WebSocket listeners
-    useEffect(() => {
-        const userId = auth.user.id;
-        const channel = window.Echo.private(`chat.${userId}`) as {
-            listen: (event: string, callback: (data: any) => void) => void;
-            stopListening: (event: string) => void;
-        };
-
-        console.log('=== WebSocket Setup ===');
-        console.log('Listening on channel:', `chat.${userId}`);
-
+    const initializeEventsListeners = (channel: ChatChannel) => {
         // Listen for processing status updates (AI thinking, using tools, etc.)
         channel.listen(
             '.message.processing',
             (data: MessageProcessingEvent) => {
-                console.log('=== Message Processing Event Received ===');
-                console.log('Event data:', data);
-
-                setProcessingStatus(data.status);
+                setProcessingStatus(data?.status);
                 setIsTyping(true);
             },
         );
 
         // Listen for streaming content (partial responses)
-        channel.listen('.message.streaming', (data: MessageStreamingEvent) => {
-            console.log('=== Message Streaming Event Received ===');
-            console.log('Event type:', data.event_type);
-
+        channel.listen('.message.streaming', () => {
             // For streaming, you could update a partial message in real-time
             // This is useful if your AI provider supports streaming
             setProcessingStatus('Streaming response...');
@@ -121,13 +61,10 @@ const ChatIndex = () => {
 
         // Listen for successful AI response
         channel.listen('.message.processed', (data: MessageProcessedEvent) => {
-            console.log('=== Message Processed Event Received ===');
-            console.log('Event data:', data);
-
             const aiMsg: MessageT = {
-                id: data.temp_message_id + '-ai',
+                id: data?.temp_message_id + '-ai',
                 role: 'assistant',
-                content: data.response,
+                content: data?.response,
                 timestamp: new Date(),
             };
 
@@ -135,10 +72,14 @@ const ChatIndex = () => {
             setIsTyping(false);
             setProcessingStatus(null);
 
-            // Store conversation ID for future messages
-            if (data.conversation_id && !conversationId) {
-                console.log('New conversation ID:', data.conversation_id);
-                setConversationId(data.conversation_id);
+            // Store conversation ID for future messages using functional update
+            if (data?.conversation_id) {
+                setConversationId((prevId) => {
+                    if (!prevId) {
+                        return data?.conversation_id;
+                    }
+                    return prevId;
+                });
             }
         });
 
@@ -151,19 +92,33 @@ const ChatIndex = () => {
             setIsTyping(false);
             setProcessingStatus(null);
         });
+    };
+
+    const stopListeners = (channel: ChatChannel) => {
+        channel.stopListening('.message.processing');
+        channel.stopListening('.message.streaming');
+        channel.stopListening('.message.processed');
+        channel.stopListening('.message.failed');
+    }
+
+    useEffect(() => {
+        scrollToBottom();
+    }, [messages, isTyping]);
+
+    // Setup WebSocket listeners
+    useEffect(() => {
+        const userId = auth.user.id;
+        const channel = window.Echo.private(`chat.${userId}`) as ChatChannel;
+        initializeEventsListeners(channel);
 
         // Cleanup listeners on unmount
         return () => {
-            console.log('=== WebSocket Cleanup ===');
-            channel.stopListening('.message.processing');
-            channel.stopListening('.message.streaming');
-            channel.stopListening('.message.processed');
-            channel.stopListening('.message.failed');
+            stopListeners(channel);
             window.Echo.leave(`chat.${userId}`);
         };
-    }, [auth.user.id, conversationId]);
+    }, [auth.user.id]);
 
-    const handleSend = async () => {
+    const handleSend = () => {
         if (!inputValue.trim()) return;
 
         const userMsg: MessageT = {
@@ -179,85 +134,33 @@ const ChatIndex = () => {
         setIsTyping(true);
         setError(null);
 
-        console.log('=== Chat Request Started (Async) ===');
-        console.log('Message:', messageToSend);
-        console.log('Conversation ID:', conversationId);
-
-        try {
-            // Get CSRF token
-            const csrfToken = document
-                .querySelector('meta[name="csrf-token"]')
-                ?.getAttribute('content');
-
-            console.log('CSRF Token:', csrfToken ? 'Present' : 'Missing');
-
-            const requestData = {
+        // Use Inertia router with Wayfinder route function
+        router.post(
+            send.url(),
+            {
                 message: messageToSend,
                 conversation_id: conversationId,
-            };
-
-            console.log('Request payload:', requestData);
-            console.log('Request URL:', '/chat');
-
-            const response = await axios.post('/chat', requestData, {
+            },
+            {
+                preserveState: true,
+                preserveScroll: true,
                 headers: {
-                    'X-CSRF-TOKEN': csrfToken || '',
-                    'Content-Type': 'application/json',
                     Accept: 'application/json',
                 },
-            });
+                onError: (errors) => {
+                    console.error('=== Chat Request Failed ===');
+                    console.error('Errors:', errors);
 
-            console.log('=== Response Received (Job Dispatched) ===');
-            console.log('Status:', response.status);
-            console.log('Pending:', response.data.pending);
-            console.log('Temp Message ID:', response.data.temp_message_id);
-            console.log('Response data:', response.data);
+                    const errorMessage =
+                        (errors as Record<string, string>).message ||
+                        Object.values(errors)[0] ||
+                        'Failed to connect to the server. Please try again.';
 
-            if (!response.data.pending) {
-                // Fallback: if for some reason we got a synchronous response
-                if (response.data.success && response.data.response) {
-                    const aiMsg: MessageT = {
-                        id: (Date.now() + 1).toString(),
-                        role: 'assistant',
-                        content: response.data.response,
-                        timestamp: new Date(),
-                    };
-                    setMessages((prev) => [...prev, aiMsg]);
+                    setError(errorMessage as string);
                     setIsTyping(false);
-
-                    if (response.data.conversation_id && !conversationId) {
-                        setConversationId(response.data.conversation_id);
-                    }
-                } else {
-                    const errorMsg =
-                        response.data.error || 'Failed to get response';
-                    console.error('Response indicated failure:', errorMsg);
-                    setError(errorMsg);
-                    setIsTyping(false);
-                }
-            }
-            // If pending=true, we wait for WebSocket event (isTyping stays true)
-        } catch (err: unknown) {
-            console.error('=== Chat Request Failed ===');
-            console.error('Error object:', err);
-
-            const error = err as {
-                response?: { data?: { error?: string } };
-                message?: string;
-            };
-            console.error('Error response:', error.response);
-            console.error('Error response data:', error.response?.data);
-            console.error('Error message:', error.message);
-
-            const errorMessage =
-                error.response?.data?.error ||
-                'Failed to connect to the server. Please try again.';
-
-            setError(errorMessage);
-            setIsTyping(false);
-        } finally {
-            console.log('=== Chat Request Completed ===');
-        }
+                },
+            },
+        );
     };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {

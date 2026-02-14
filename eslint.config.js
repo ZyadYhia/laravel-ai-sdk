@@ -56,6 +56,13 @@ export default [
         },
     },
     {
+        files: ['**/*.{js,jsx,ts,tsx}'],
+        rules: {
+            'semi': ['error', 'never'],
+            '@typescript-eslint/semi': ['error', 'never'],
+        },
+    },
+    {
         ignores: ['vendor', 'node_modules', 'public', 'bootstrap/ssr', 'tailwind.config.js', 'vite.config.ts'],
     },
     prettier, // Turn off all rules that might conflict with Prettier

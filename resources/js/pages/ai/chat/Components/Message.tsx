@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { type MessageT } from '../index';
+import { type MessageT } from '../types.d';
 
 type MessageComponentPropsT = {
     msg: MessageT;
