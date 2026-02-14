@@ -1,4 +1,6 @@
 import { Bot, User } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { type MessageT } from '../index';
@@ -50,7 +52,15 @@ const MessageComponent = (props: MessageComponentPropsT) => {
                                 : 'rounded-tl-none border bg-card text-card-foreground'
                         }`}
                     >
-                        {msg.content}
+                        {msg.role === 'assistant' ? (
+                            <div className="prose prose-sm max-w-none dark:prose-invert prose-headings:mt-4 prose-headings:mb-2 prose-p:my-2 prose-strong:font-semibold prose-ol:my-2 prose-ul:my-2 prose-li:my-1">
+                                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                    {msg.content}
+                                </ReactMarkdown>
+                            </div>
+                        ) : (
+                            msg.content
+                        )}
                     </div>
                     <span className="mt-1 px-1 text-[10px] text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
                         {msg.timestamp.toLocaleTimeString([], {

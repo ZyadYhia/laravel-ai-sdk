@@ -7,12 +7,40 @@ import { Input } from '@/components/ui/input';
 import IsTyping from './Components/IsTyping';
 import MessageComponent from './Components/Message';
 import HomeLayout from '@/layouts/home/layout';
+import { usePage } from '@inertiajs/react';
+import type { Auth } from '@/types';
 
 export type MessageT = {
     id: string;
     role: 'user' | 'assistant';
     content: string;
     timestamp: Date;
+};
+
+type MessageProcessedEvent = {
+    conversation_id: string;
+    response: string;
+    temp_message_id: string;
+    timestamp: string;
+};
+
+type MessageFailedEvent = {
+    temp_message_id: string;
+    error: string;
+    timestamp: string;
+};
+
+type MessageProcessingEvent = {
+    temp_message_id: string;
+    status: string;
+    timestamp: string;
+};
+
+type MessageStreamingEvent = {
+    temp_message_id: string;
+    partial_content: string;
+    event_type: string;
+    timestamp: string;
 };
 
 const EmptyState = () => (
@@ -31,16 +59,21 @@ const EmptyState = () => (
 );
 
 const ChatIndex = () => {
+    const { auth } = usePage<{ auth: Auth }>().props;
     const [messages, setMessages] = useState<MessageT[]>([
         {
-            id: '1',
+            id: 'system',
             role: 'assistant',
-            content: 'Hello! I am your AI assistant. How can I help you today?',
+            content:
+                'Hello! I am your AI assistant. How can I help you today?\n\n*Please note: I will format all my responses in Markdown for better readability.*',
             timestamp: new Date(),
         },
     ]);
     const [inputValue, setInputValue] = useState('');
     const [isTyping, setIsTyping] = useState(false);
+    const [processingStatus, setProcessingStatus] = useState<string | null>(
+        null,
+    );
     const [conversationId, setConversationId] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -52,6 +85,83 @@ const ChatIndex = () => {
     useEffect(() => {
         scrollToBottom();
     }, [messages, isTyping]);
+
+    // Setup WebSocket listeners
+    useEffect(() => {
+        const userId = auth.user.id;
+        const channel = window.Echo.private(`chat.${userId}`) as {
+            listen: (event: string, callback: (data: any) => void) => void;
+            stopListening: (event: string) => void;
+        };
+
+        console.log('=== WebSocket Setup ===');
+        console.log('Listening on channel:', `chat.${userId}`);
+
+        // Listen for processing status updates (AI thinking, using tools, etc.)
+        channel.listen(
+            '.message.processing',
+            (data: MessageProcessingEvent) => {
+                console.log('=== Message Processing Event Received ===');
+                console.log('Event data:', data);
+
+                setProcessingStatus(data.status);
+                setIsTyping(true);
+            },
+        );
+
+        // Listen for streaming content (partial responses)
+        channel.listen('.message.streaming', (data: MessageStreamingEvent) => {
+            console.log('=== Message Streaming Event Received ===');
+            console.log('Event type:', data.event_type);
+
+            // For streaming, you could update a partial message in real-time
+            // This is useful if your AI provider supports streaming
+            setProcessingStatus('Streaming response...');
+        });
+
+        // Listen for successful AI response
+        channel.listen('.message.processed', (data: MessageProcessedEvent) => {
+            console.log('=== Message Processed Event Received ===');
+            console.log('Event data:', data);
+
+            const aiMsg: MessageT = {
+                id: data.temp_message_id + '-ai',
+                role: 'assistant',
+                content: data.response,
+                timestamp: new Date(),
+            };
+
+            setMessages((prev) => [...prev, aiMsg]);
+            setIsTyping(false);
+            setProcessingStatus(null);
+
+            // Store conversation ID for future messages
+            if (data.conversation_id && !conversationId) {
+                console.log('New conversation ID:', data.conversation_id);
+                setConversationId(data.conversation_id);
+            }
+        });
+
+        // Listen for failed AI response
+        channel.listen('.message.failed', (data: MessageFailedEvent) => {
+            console.error('=== Message Failed Event Received ===');
+            console.error('Event data:', data);
+
+            setError(data.error);
+            setIsTyping(false);
+            setProcessingStatus(null);
+        });
+
+        // Cleanup listeners on unmount
+        return () => {
+            console.log('=== WebSocket Cleanup ===');
+            channel.stopListening('.message.processing');
+            channel.stopListening('.message.streaming');
+            channel.stopListening('.message.processed');
+            channel.stopListening('.message.failed');
+            window.Echo.leave(`chat.${userId}`);
+        };
+    }, [auth.user.id, conversationId]);
 
     const handleSend = async () => {
         if (!inputValue.trim()) return;
@@ -69,7 +179,7 @@ const ChatIndex = () => {
         setIsTyping(true);
         setError(null);
 
-        console.log('=== Chat Request Started ===');
+        console.log('=== Chat Request Started (Async) ===');
         console.log('Message:', messageToSend);
         console.log('Conversation ID:', conversationId);
 
@@ -97,62 +207,55 @@ const ChatIndex = () => {
                 },
             });
 
-            console.log('=== Response Received ===');
+            console.log('=== Response Received (Job Dispatched) ===');
             console.log('Status:', response.status);
-            console.log('Success:', response.data.success);
+            console.log('Pending:', response.data.pending);
+            console.log('Temp Message ID:', response.data.temp_message_id);
             console.log('Response data:', response.data);
 
-            if (response.data.success) {
-                const aiMsg: MessageT = {
-                    id: (Date.now() + 1).toString(),
-                    role: 'assistant',
-                    content: response.data.response,
-                    timestamp: new Date(),
-                };
-                setMessages((prev) => [...prev, aiMsg]);
+            if (!response.data.pending) {
+                // Fallback: if for some reason we got a synchronous response
+                if (response.data.success && response.data.response) {
+                    const aiMsg: MessageT = {
+                        id: (Date.now() + 1).toString(),
+                        role: 'assistant',
+                        content: response.data.response,
+                        timestamp: new Date(),
+                    };
+                    setMessages((prev) => [...prev, aiMsg]);
+                    setIsTyping(false);
 
-                // Store conversation ID for future messages
-                if (response.data.conversation_id && !conversationId) {
-                    console.log(
-                        'New conversation ID:',
-                        response.data.conversation_id,
-                    );
-                    setConversationId(response.data.conversation_id);
+                    if (response.data.conversation_id && !conversationId) {
+                        setConversationId(response.data.conversation_id);
+                    }
+                } else {
+                    const errorMsg =
+                        response.data.error || 'Failed to get response';
+                    console.error('Response indicated failure:', errorMsg);
+                    setError(errorMsg);
+                    setIsTyping(false);
                 }
-            } else {
-                const errorMsg =
-                    response.data.error || 'Failed to get response';
-                const details = response.data.details
-                    ? `\n\nDetails: ${response.data.details}`
-                    : '';
-                console.error('Response indicated failure:', errorMsg, details);
-                setError(errorMsg + details);
             }
-        } catch (err: any) {
+            // If pending=true, we wait for WebSocket event (isTyping stays true)
+        } catch (err: unknown) {
             console.error('=== Chat Request Failed ===');
             console.error('Error object:', err);
-            console.error('Error response:', err.response);
-            console.error('Error response data:', err.response?.data);
-            console.error('Error message:', err.message);
 
-            let errorMessage =
-                err.response?.data?.error ||
-                'Failed to connect to the AI. Please make sure Ollama is running.';
+            const error = err as {
+                response?: { data?: { error?: string } };
+                message?: string;
+            };
+            console.error('Error response:', error.response);
+            console.error('Error response data:', error.response?.data);
+            console.error('Error message:', error.message);
 
-            // Add details if available
-            if (err.response?.data?.details) {
-                errorMessage += `\n\nDetails: ${err.response.data.details}`;
-                console.error('Error details:', err.response.data.details);
-            }
-            if (err.response?.data?.file && err.response?.data?.line) {
-                const location = `${err.response.data.file}:${err.response.data.line}`;
-                errorMessage += `\n\nLocation: ${location}`;
-                console.error('Error location:', location);
-            }
+            const errorMessage =
+                error.response?.data?.error ||
+                'Failed to connect to the server. Please try again.';
 
             setError(errorMessage);
-        } finally {
             setIsTyping(false);
+        } finally {
             console.log('=== Chat Request Completed ===');
         }
     };
@@ -178,7 +281,16 @@ const ChatIndex = () => {
                             ))
                         )}
 
-                        {isTyping && <IsTyping />}
+                        {isTyping && (
+                            <div className="flex flex-col gap-2">
+                                <IsTyping />
+                                {processingStatus && (
+                                    <p className="animate-pulse text-sm text-muted-foreground">
+                                        {processingStatus}
+                                    </p>
+                                )}
+                            </div>
+                        )}
 
                         {error && (
                             <Alert

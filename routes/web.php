@@ -15,4 +15,4 @@ Route::get('dashboard', function () {
 Route::get('chat', [AiChatController::class, 'index'])->name('chat');
 Route::post('chat', [AiChatController::class, 'chat'])->name('chat.send');
 
-require __DIR__ . '/settings.php';
+require __DIR__.'/settings.php';
