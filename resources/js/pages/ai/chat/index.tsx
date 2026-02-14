@@ -30,6 +30,19 @@ type MessageFailedEvent = {
     timestamp: string;
 };
 
+type MessageProcessingEvent = {
+    temp_message_id: string;
+    status: string;
+    timestamp: string;
+};
+
+type MessageStreamingEvent = {
+    temp_message_id: string;
+    partial_content: string;
+    event_type: string;
+    timestamp: string;
+};
+
 const EmptyState = () => (
     <div className="flex flex-1 animate-in flex-col items-center justify-center p-8 text-center duration-500 fade-in">
         <div className="mb-4 rounded-full bg-primary/10 p-4">
@@ -57,6 +70,9 @@ const ChatIndex = () => {
     ]);
     const [inputValue, setInputValue] = useState('');
     const [isTyping, setIsTyping] = useState(false);
+    const [processingStatus, setProcessingStatus] = useState<string | null>(
+        null,
+    );
     const [conversationId, setConversationId] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -72,10 +88,35 @@ const ChatIndex = () => {
     // Setup WebSocket listeners
     useEffect(() => {
         const userId = auth.user.id;
-        const channel = window.Echo.private(`chat.${userId}`);
+        const channel = window.Echo.private(`chat.${userId}`) as {
+            listen: (event: string, callback: (data: any) => void) => void;
+            stopListening: (event: string) => void;
+        };
 
         console.log('=== WebSocket Setup ===');
         console.log('Listening on channel:', `chat.${userId}`);
+
+        // Listen for processing status updates (AI thinking, using tools, etc.)
+        channel.listen(
+            '.message.processing',
+            (data: MessageProcessingEvent) => {
+                console.log('=== Message Processing Event Received ===');
+                console.log('Event data:', data);
+
+                setProcessingStatus(data.status);
+                setIsTyping(true);
+            },
+        );
+
+        // Listen for streaming content (partial responses)
+        channel.listen('.message.streaming', (data: MessageStreamingEvent) => {
+            console.log('=== Message Streaming Event Received ===');
+            console.log('Event type:', data.event_type);
+
+            // For streaming, you could update a partial message in real-time
+            // This is useful if your AI provider supports streaming
+            setProcessingStatus('Streaming response...');
+        });
 
         // Listen for successful AI response
         channel.listen('.message.processed', (data: MessageProcessedEvent) => {
@@ -91,6 +132,7 @@ const ChatIndex = () => {
 
             setMessages((prev) => [...prev, aiMsg]);
             setIsTyping(false);
+            setProcessingStatus(null);
 
             // Store conversation ID for future messages
             if (data.conversation_id && !conversationId) {
@@ -106,11 +148,14 @@ const ChatIndex = () => {
 
             setError(data.error);
             setIsTyping(false);
+            setProcessingStatus(null);
         });
 
         // Cleanup listeners on unmount
         return () => {
             console.log('=== WebSocket Cleanup ===');
+            channel.stopListening('.message.processing');
+            channel.stopListening('.message.streaming');
             channel.stopListening('.message.processed');
             channel.stopListening('.message.failed');
             window.Echo.leave(`chat.${userId}`);
@@ -235,7 +280,16 @@ const ChatIndex = () => {
                             ))
                         )}
 
-                        {isTyping && <IsTyping />}
+                        {isTyping && (
+                            <div className="flex flex-col gap-2">
+                                <IsTyping />
+                                {processingStatus && (
+                                    <p className="animate-pulse text-sm text-muted-foreground">
+                                        {processingStatus}
+                                    </p>
+                                )}
+                            </div>
+                        )}
 
                         {error && (
                             <Alert
