@@ -44,13 +44,10 @@ class AiChatController extends Controller
 
         Log::info('Chat job dispatched', ['temp_message_id' => $tempMessageId]);
 
-        // Return immediate response indicating job was queued
-        return response()->json([
+        return back()->with([
             'success' => true,
             'pending' => true,
             'temp_message_id' => $tempMessageId,
-            'message' => 'Your message is being processed...',
-            'timestamp' => now()->toIso8601String(),
         ]);
     }
 }

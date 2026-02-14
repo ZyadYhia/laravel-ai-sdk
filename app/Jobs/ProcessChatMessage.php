@@ -15,6 +15,13 @@ class ProcessChatMessage implements ShouldQueue
     use Queueable;
 
     /**
+     * The number of seconds the job can run before timing out.
+     *
+     * @var int
+     */
+    public int $timeout = 300;
+
+    /**
      * Create a new job instance.
      */
     public function __construct(

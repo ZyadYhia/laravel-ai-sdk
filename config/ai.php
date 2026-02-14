@@ -104,6 +104,7 @@ return [
             'key' => env('OLLAMA_API_KEY', ''),
             'url' => env('OLLAMA_BASE_URL', 'http://localhost:11434'),
             'model' => env('OLLAMA_LLM_MODEL', 'llama3.2:1b'),
+            'timeout' => env('OLLAMA_TIMEOUT', 180),
         ],
 
         'openai' => [

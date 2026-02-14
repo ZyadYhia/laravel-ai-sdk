@@ -25,14 +25,6 @@ IMPORTANT: You must format ALL your responses using Markdown syntax. Use heading
     }
 
     /**
-     * Get the list of messages comprising the conversation so far.
-     */
-    public function messages(): iterable
-    {
-        return [];
-    }
-
-    /**
      * Get the tools available to the agent.
      *
      * @return Tool[]
