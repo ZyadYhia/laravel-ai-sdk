@@ -39,16 +39,7 @@ export default [
             },
         },
         rules: {
-            'import/order': [
-                'error',
-                {
-                    groups: ['builtin', 'external', 'internal', 'parent', 'sibling', 'index'],
-                    alphabetize: {
-                        order: 'asc',
-                        caseInsensitive: true,
-                    },
-                },
-            ],
+            'import/order': 'off',
         },
     },
     {
@@ -62,6 +53,13 @@ export default [
                     fixStyle: 'separate-type-imports',
                 },
             ],
+        },
+    },
+    {
+        files: ['**/*.{js,jsx,ts,tsx}'],
+        rules: {
+            'semi': ['error', 'never'],
+            '@typescript-eslint/semi': ['error', 'never'],
         },
     },
     {
