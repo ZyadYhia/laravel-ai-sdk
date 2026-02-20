@@ -99,7 +99,7 @@ const ChatIndex = () => {
         channel.stopListening('.message.streaming');
         channel.stopListening('.message.processed');
         channel.stopListening('.message.failed');
-    }
+    };
 
     useEffect(() => {
         scrollToBottom();
@@ -107,6 +107,9 @@ const ChatIndex = () => {
 
     // Setup WebSocket listeners
     useEffect(() => {
+        if (!auth.user || !auth.user.id) {
+            return;
+        }
         const userId = auth.user.id;
         const channel = window.Echo.private(`chat.${userId}`) as ChatChannel;
         initializeEventsListeners(channel);
@@ -116,7 +119,7 @@ const ChatIndex = () => {
             stopListeners(channel);
             window.Echo.leave(`chat.${userId}`);
         };
-    }, [auth.user.id]);
+    }, [auth.user && auth.user.id]);
 
     const handleSend = () => {
         if (!inputValue.trim()) return;
