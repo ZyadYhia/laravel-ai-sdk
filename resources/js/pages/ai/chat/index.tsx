@@ -107,19 +107,18 @@ const ChatIndex = () => {
 
     // Setup WebSocket listeners
     useEffect(() => {
-        if (!auth.user || !auth.user.id) {
+        if (!auth?.user?.id) {
             return;
         }
         const userId = auth.user.id;
         const channel = window.Echo.private(`chat.${userId}`) as ChatChannel;
         initializeEventsListeners(channel);
 
-        // Cleanup listeners on unmount
         return () => {
             stopListeners(channel);
             window.Echo.leave(`chat.${userId}`);
         };
-    }, [auth.user && auth.user.id]);
+    }, [auth?.user?.id]);
 
     const handleSend = () => {
         if (!inputValue.trim()) return;
