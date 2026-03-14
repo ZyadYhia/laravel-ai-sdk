@@ -22,6 +22,8 @@ class AiChatController extends Controller
         $message = $request->input('message');
         $conversationId = $request->input('conversation_id');
 
+        dd($request->message, $request->hasFile('image'));
+
         // Generate temporary message ID for tracking
         $tempMessageId = (string) Str::uuid();
 

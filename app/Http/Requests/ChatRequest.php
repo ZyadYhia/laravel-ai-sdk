@@ -22,7 +22,8 @@ class ChatRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'message' => ['required', 'string', 'max:5000'],
+            'message' => ['required_without:image', 'string', 'max:5000'],
+            'image' => ['nullable', 'file', 'image', 'max:5120'], // 5MB max
             'conversation_id' => ['nullable', 'string', 'exists:agent_conversations,id'],
         ];
     }
@@ -35,8 +36,10 @@ class ChatRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'message.required' => 'Please enter a message.',
+            'message.required_without' => 'Please enter a message or attach an image.',
             'message.max' => 'Your message is too long. Please keep it under 5000 characters.',
+            'image.image' => 'The file must be an image.',
+            'image.max' => 'The image may not be greater than 5MB.',
             'conversation_id.exists' => 'The conversation could not be found.',
         ];
     }
